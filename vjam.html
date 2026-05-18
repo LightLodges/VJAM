@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VJAM</title>
+<!--
+  ╔═══════════════════════════════════════════════════════════════╗
+  ║   VJAM — Lightweight Browser VJ Engine                       ║
+  ║   White Label Edition                                        ║
+  ║                                                               ║
+  ║   To license, white label, or commission a custom build:     ║
+  ║   evo@playable.agency  |  evo.ist/vjam                       ║
+  ║                                                               ║
+  ║   © Realitycraft — All rights reserved                       ║
+  ╚═══════════════════════════════════════════════════════════════╝
+
+  QUICK START
+  ─────────────────────────────────────────────────────────────────
+  1. Edit CONFIG below to set your event title and colors
+  2. Open this file in Chrome or Edge
+  3. Drop image/video files onto the asset panel or stage
+  4. Click FULLSCREEN and connect your projector
+  5. Assets persist across page reloads — no re-importing needed
+
+  SUPPORTED FORMATS
+  ─────────────────────────────────────────────────────────────────
+  Images: PNG, JPG, GIF, WebP, SVG
+  Video:  MP4 (H.264), WebM   — convert .mov to .mp4 first
+
+  KEYBOARD SHORTCUTS
+  ─────────────────────────────────────────────────────────────────
+  Space    Flash title        F    Fullscreen
+  Q / E    Prev / Next        R    Red takeover (hold)
+  B        Blue takeover      A    Auto-advance toggle
+  G        Glitch FX          T    Tap BPM
+  1–9      Load asset #       Esc  Release / exit fullscreen
+-->
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG — Edit this block to white label VJAM for your event
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+  // Branding
+  title:           'YOUR EVENT',        // Shown in header and on title flash
+  subtitle:        'LIVE MIX',          // Tagline shown under title in header
+  logoUrl:         '',                  // Optional: URL to logo image (leave '' to use text)
+
+  // Colors (hex values)
+  accentColor:     '#00ffcc',           // Primary UI highlight color
+  redColor:        '#ff1a1a',           // Red takeover button and overlay
+  blueColor:       '#1a4fff',           // Blue takeover button and overlay
+  panelBg:         '#0e0e18',           // Left/right panel background
+  stageBg:         '#000000',           // Stage/output background
+
+  // Default transition
+  defaultTrans:    'glitch',            // cut | fade | glitch | zoom | slide | strobe
+
+  // Auto-advance defaults
+  defaultAutoOn:   true,                // Start with auto-advance running
+  defaultInterval: 10,                  // Seconds between auto-advances
+  defaultMode:     'rnd',               // seq | rnd | ping
+
+  // Auto takeover
+  autoTakeover:    true,                // Fire periodic full-screen takeovers
+  tkoInterval:     120,                 // Seconds between auto takeovers (~2 min)
+  tkoDuration:     5,                   // Seconds each takeover holds
+
+  // Title flash
+  autoFlash:       true,                // Periodic title flash bursts
+  flashInterval:   30,                  // Seconds between title flashes
+  flashStyle:      'solid',             // solid | outline | glitch | rainbow
+
+  // Attribution (shown in page footer — keep for white label compliance)
+  showAttribution: true,
+  attributionUrl:  'https://evo.ist/vjam',
+};
+// ═══════════════════════════════════════════════════════════════
+</script>
+
+<style>
+/* ─── BASE ─── */
+:root {
+  --accent:  #00ffcc;   /* overridden by CONFIG at runtime */
+  --red:     #ff1a1a;
+  --blue:    #1a4fff;
+  --bg:      #07070d;
+  --panel:   #0e0e18;
+  --panel2:  #13131f;
+  --border:  #2e2e44;
+  --yellow:  #ffee00;
+  --mag:     #ff00cc;
+  --white:   #fff;
+  --dim:     #7888aa;
+  --text:    #dde2ff;
+  --accent2: #7755ff;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px; color: var(--text);
+  display: flex; flex-direction: column; height: 100vh; background: var(--bg);
+  user-select: none;
+}
+
+/* ─── TOPBAR ─── */
+#topbar {
+  height: 44px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  background: #050510; border-bottom: 1px solid var(--border);
+  z-index: 100; transition: opacity 0.4s, transform 0.4s;
+}
+#vjam-logo {
+  display: flex; align-items: center; gap: 10px; white-space: nowrap; flex-shrink: 0;
+}
+#vjam-logo img { height: 26px; object-fit: contain; display: block; }
+.title-text {
+  font-size: 15px; font-weight: 800; letter-spacing: 3px; font-style: italic;
+  color: var(--accent); text-shadow: 0 0 20px var(--accent);
+}
+.subtitle-text { font-size: 10px; color: var(--dim); letter-spacing: 1px; margin-top: 1px; }
+.spacer { flex: 1; }
+.tbtn {
+  padding: 5px 11px; border: 1px solid var(--border); background: var(--panel2);
+  color: var(--text); cursor: pointer; border-radius: 4px;
+  font-family: inherit; font-size: 11px; letter-spacing: 0.5px;
+  white-space: nowrap; transition: all 0.1s;
+}
+.tbtn:hover { border-color: var(--accent); color: var(--accent); }
+.tbtn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,255,204,0.08); }
+#fsBtn { border-color: var(--accent2); color: var(--accent2); }
+#fsBtn:hover { background: var(--accent2); color: #fff; }
+
+/* ─── CONTENT ─── */
+#content { flex: 1; display: flex; overflow: hidden; position: relative; }
+
+/* ─── ASSET PANEL ─── */
+#assetPanel {
+  width: 148px; flex-shrink: 0; background: var(--panel);
+  border-right: 1px solid var(--border); display: flex; flex-direction: column;
+  overflow: hidden; transition: width 0.2s, opacity 0.2s; z-index: 10;
+}
+#assetPanel.collapsed { width: 0; opacity: 0; pointer-events: none; }
+.panel-hdr {
+  height: 28px; flex-shrink: 0; padding: 0 8px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  font-size: 10px; letter-spacing: 1px; color: var(--text); font-weight: 600; text-transform: uppercase;
+}
+#dropZone {
+  margin: 5px; padding: 10px 6px; border: 1px dashed var(--border); border-radius: 4px;
+  text-align: center; color: var(--dim); font-size: 11px; letter-spacing: 0.5px;
+  cursor: pointer; flex-shrink: 0; transition: all 0.2s; line-height: 1.8;
+}
+#dropZone:hover, #dropZone.over { border-color: var(--accent); color: var(--accent); background: rgba(0,255,204,0.04); }
+#fileInput { display: none; }
+#assetGrid {
+  flex: 1; overflow-y: auto; overflow-x: hidden; padding: 3px;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 2px; align-content: start;
+}
+#assetGrid::-webkit-scrollbar { width: 3px; }
+#assetGrid::-webkit-scrollbar-thumb { background: var(--border); }
+.thumb {
+  aspect-ratio: 1; background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 2px; cursor: grab; position: relative; overflow: hidden; transition: border-color 0.1s;
+}
+.thumb:active { cursor: grabbing; }
+.thumb:hover { border-color: var(--text); z-index: 2; }
+.thumb.active-a { border-color: var(--red); box-shadow: 0 0 5px var(--red); }
+.thumb.active-b { border-color: var(--blue); box-shadow: 0 0 5px var(--blue); }
+.thumb img, .thumb video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; display: block; }
+.thumb-overlay {
+  position: absolute; inset: 0; opacity: 0; background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center; gap: 2px; transition: opacity 0.1s;
+}
+.thumb:hover .thumb-overlay { opacity: 1; }
+.dtag { font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; cursor: pointer; letter-spacing: 0.5px; }
+.dtag.a { background: var(--red); color: #fff; }
+.dtag.b { background: var(--blue); color: #fff; }
+.thumb-num { position: absolute; top: 2px; left: 3px; font-size: 9px; font-weight: 600; color: rgba(255,255,255,0.5); pointer-events: none; }
+
+/* ─── STAGE ─── */
+#stage {
+  flex: 1; position: relative; overflow: hidden; background: #000;
+  display: flex; align-items: center; justify-content: center;
+}
+.layer {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  transition: opacity 0.05s;
+}
+.layer img, .layer video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block; }
+#layerA { z-index: 1; }
+#layerB { z-index: 2; }
+
+/* Takeover */
+#takeoverLayer {
+  position: absolute; inset: 0; z-index: 8;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s;
+}
+#takeoverLayer.active { opacity: 1; pointer-events: all; }
+#takeoverAsset { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+#takeoverTint { position: absolute; inset: 0; mix-blend-mode: multiply; opacity: 0.85; }
+#takeoverTitle {
+  position: relative; z-index: 2; font-size: 7vw; font-weight: 900; font-style: italic;
+  letter-spacing: 0.25em; color: #fff; text-align: center;
+  text-shadow: 0 0 60px currentColor, 0 0 120px rgba(255,255,255,0.3);
+  animation: titlePulse 0.4s ease-in-out infinite alternate;
+}
+@keyframes titlePulse { from { transform: scale(1) skewX(-1deg); } to { transform: scale(1.02) skewX(1deg); } }
+
+/* Title flash */
+#titleFlash {
+  position: absolute; inset: 0; z-index: 9;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.12s;
+}
+#flashMsg {
+  font-size: 8vw; font-weight: 900; font-style: italic;
+  letter-spacing: 0.2em; text-align: center; color: #fff;
+  text-shadow: 0 0 80px #fff, 0 0 160px rgba(255,255,255,0.4);
+}
+
+/* Live text */
+#liveTextLayer {
+  position: absolute; inset: 0; z-index: 7;
+  display: flex; justify-content: center; align-items: flex-end;
+  padding: 40px; pointer-events: none;
+}
+#liveMsg {
+  font-size: 4.5vw; font-weight: 900; letter-spacing: 0.1em; text-align: center;
+  color: #fff; text-shadow: 0 0 30px currentColor, 2px 2px 0 #000;
+  max-width: 90%; word-break: break-word;
+}
+
+/* FX overlays */
+#scanlines {
+  position: absolute; inset: 0; z-index: 10; pointer-events: none; opacity: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.18) 2px, rgba(0,0,0,0.18) 4px);
+}
+#glitchFx { position: absolute; inset: 0; z-index: 11; pointer-events: none; opacity: 0; mix-blend-mode: screen; }
+#vignette {
+  position: absolute; inset: 0; z-index: 6; pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.55) 100%); opacity: 0.5;
+}
+#strobeOverlay { position: absolute; inset: 0; z-index: 20; background: #fff; opacity: 0; pointer-events: none; }
+
+/* Stage hint */
+#stageHint {
+  position: absolute; inset: 0; z-index: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; pointer-events: none;
+}
+#stageHint .big-title { font-size: 4vw; font-weight: 900; font-style: italic; letter-spacing: 8px; color: rgba(255,255,255,0.05); }
+#stageHint .hint { font-size: 13px; color: var(--dim); letter-spacing: 3px; }
+
+/* Status dots */
+#statusDot { position: absolute; top: 6px; right: 6px; z-index: 50; display: flex; gap: 5px; pointer-events: none; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+.dot.live { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 1s infinite; }
+.dot.auto { background: var(--yellow); }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Auto countdown */
+#autoCountdown {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.65); border: 1px solid var(--border);
+  border-radius: 4px; padding: 3px 10px; font-size: 11px; color: var(--dim);
+  letter-spacing: 0.5px; z-index: 20; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+}
+#autoCountdown.visible { opacity: 1; }
+
+/* Drag highlight */
+#stage.drag-over::before {
+  content: 'DROP TO LOAD'; position: absolute; inset: 0;
+  background: rgba(0,255,204,0.06); border: 2px dashed var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; letter-spacing: 4px; color: var(--accent); z-index: 99;
+}
+
+/* ─── SIDE PANEL ─── */
+#sidePanel {
+  width: 210px; flex-shrink: 0; background: var(--panel); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden;
+  z-index: 10; transition: width 0.2s, opacity 0.2s;
+}
+#sidePanel.collapsed { width: 0; opacity: 0; pointer-events: none; }
+#sidePanel::-webkit-scrollbar { width: 3px; }
+#sidePanel::-webkit-scrollbar-thumb { background: var(--border); }
+.sp-section { border-bottom: 1px solid var(--border); padding: 10px; }
+.sp-title { font-size: 10px; letter-spacing: 1.5px; color: var(--dim); margin-bottom: 8px; text-transform: uppercase; font-weight: 600; }
+
+/* Text input */
+#overlayInput {
+  width: 100%; padding: 6px 8px; background: var(--panel2);
+  border: 1px solid var(--border); color: #fff; font-family: inherit; font-size: 13px;
+  border-radius: 4px; resize: none; margin-bottom: 6px;
+}
+#overlayInput:focus { outline: none; border-color: var(--accent); }
+.color-row { display: flex; gap: 6px; margin-bottom: 7px; }
+.cdot { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.1s; }
+.cdot.active { border-color: #fff; }
+.pos-row { display: flex; gap: 4px; margin-bottom: 7px; flex-wrap: wrap; }
+.sbtn {
+  padding: 4px 9px; background: var(--panel2); border: 1px solid var(--border);
+  color: var(--dim); border-radius: 4px; cursor: pointer;
+  font-family: inherit; font-size: 11px; letter-spacing: 0.3px; transition: all 0.1s;
+}
+.sbtn:hover { color: var(--text); border-color: var(--text); }
+.sbtn.active { color: var(--accent); border-color: var(--accent); background: rgba(0,255,204,0.08); }
+
+/* FX sliders */
+.fx-row { margin-bottom: 7px; }
+.fx-label { font-size: 11px; color: var(--dim); letter-spacing: 0.3px; margin-bottom: 4px; display: flex; justify-content: space-between; }
+.fx-label span:last-child { color: var(--text); font-weight: 600; }
+input[type=range] { -webkit-appearance: none; width: 100%; height: 5px; border-radius: 3px; outline: none; cursor: pointer; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; cursor: pointer; }
+#hueRange { background: linear-gradient(to right, red, yellow, green, cyan, blue, magenta, red); }
+#hueRange::-webkit-slider-thumb { background: #fff; }
+#conRange { background: linear-gradient(to right, #111, #fff); }
+#conRange::-webkit-slider-thumb { background: var(--text); }
+#briRange { background: linear-gradient(to right, #000, var(--yellow)); }
+#briRange::-webkit-slider-thumb { background: var(--yellow); }
+#satRange { background: linear-gradient(to right, #555, var(--mag)); }
+#satRange::-webkit-slider-thumb { background: var(--mag); }
+
+/* FX toggles */
+.fx-toggles { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 6px; }
+.fxtgl {
+  padding: 4px 8px; background: var(--panel2); border: 1px solid var(--border);
+  color: var(--dim); border-radius: 3px; cursor: pointer;
+  font-family: inherit; font-size: 10px; letter-spacing: 0.3px; transition: all 0.1s;
+}
+.fxtgl.on { color: var(--yellow); border-color: var(--yellow); background: rgba(255,238,0,0.08); }
+
+/* Toggles */
+.tgl-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.tgl-label { font-size: 12px; color: var(--text); letter-spacing: 0.3px; }
+.tgl { width: 28px; height: 14px; background: var(--border); border-radius: 7px; position: relative; cursor: pointer; flex-shrink: 0; transition: background 0.2s; }
+.tgl.on { background: var(--accent); }
+.tgl::after { content: ''; position: absolute; width: 10px; height: 10px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left 0.2s; }
+.tgl.on::after { left: 16px; }
+
+/* ─── MIX BAR ─── */
+#mixbar {
+  height: 64px; flex-shrink: 0; display: flex; align-items: center;
+  padding: 0 10px; gap: 10px; flex-wrap: nowrap; overflow: hidden;
+  background: #050510; border-top: 1px solid var(--border);
+  z-index: 100; transition: opacity 0.4s;
+}
+.deck-lbl { font-size: 12px; font-weight: 900; letter-spacing: 2px; padding: 3px 7px; border-radius: 3px; white-space: nowrap; }
+.deck-lbl.a { color: var(--red); border: 1px solid var(--red); background: rgba(255,26,26,0.1); }
+.deck-lbl.b { color: #5599ff; border: 1px solid #5599ff; background: rgba(26,79,255,0.1); }
+#xfWrap { flex: 1; min-width: 80px; display: flex; align-items: center; gap: 4px; }
+#xf { width: 100%; }
+.sep { width: 1px; height: 30px; background: var(--border); flex-shrink: 0; }
+.tr-group { display: flex; gap: 2px; flex-shrink: 0; }
+.trbtn {
+  padding: 4px 9px; background: var(--panel2); border: 1px solid var(--border);
+  color: var(--dim); border-radius: 3px; cursor: pointer;
+  font-family: inherit; font-size: 11px; letter-spacing: 0.5px; transition: all 0.1s;
+}
+.trbtn:hover { border-color: var(--text); color: var(--text); }
+.trbtn.active { background: var(--accent2); border-color: var(--accent2); color: #fff; }
+#bpmBtn {
+  padding: 4px 10px; background: var(--panel2); border: 1px solid var(--border);
+  color: var(--accent); border-radius: 3px; cursor: pointer; font-family: inherit;
+  font-size: 11px; letter-spacing: 0.5px; text-align: center; min-width: 62px; flex-shrink: 0;
+}
+#bpmBtn:active { background: var(--accent); color: #000; }
+#flashBtn {
+  flex-shrink: 0; padding: 4px 12px; background: rgba(255,238,0,0.08);
+  border: 1px solid var(--yellow); color: var(--yellow); border-radius: 3px; cursor: pointer;
+  font-family: inherit; font-size: 11px; letter-spacing: 0.5px; transition: all 0.1s;
+}
+#flashBtn:hover { background: rgba(255,238,0,0.2); }
+#flashBtn:active { background: var(--yellow); color: #000; }
+#redBtn, #blueBtn {
+  flex-shrink: 0; border: none; border-radius: 4px; font-family: inherit;
+  font-weight: 900; letter-spacing: 3px; font-size: 14px; cursor: pointer;
+  padding: 0 14px; height: 40px; white-space: nowrap; transition: all 0.05s;
+}
+#redBtn { background: var(--red); color: #fff; box-shadow: 0 0 14px rgba(255,26,26,0.35); }
+#redBtn:hover { box-shadow: 0 0 30px var(--red); }
+#redBtn:active { transform: scale(0.96); }
+#blueBtn { background: var(--blue); color: #fff; box-shadow: 0 0 14px rgba(26,79,255,0.35); }
+#blueBtn:hover { box-shadow: 0 0 30px var(--blue); }
+#blueBtn:active { transform: scale(0.96); }
+
+/* Deck mini previews */
+.deck-mini { width: 50px; height: 36px; background: #000; border-radius: 2px; overflow: hidden; position: relative; border: 1px solid var(--border); flex-shrink: 0; }
+.deck-mini img, .deck-mini video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.deck-mini-lbl { position: absolute; top: 1px; left: 2px; font-size: 10px; font-weight: bold; text-shadow: 0 0 4px #000; }
+.deck-mini.a-mini .deck-mini-lbl { color: var(--red); }
+.deck-mini.b-mini .deck-mini-lbl { color: #5599ff; }
+
+/* ─── FULLSCREEN MODE ─── */
+body.fs-mode #topbar, body.fs-mode #mixbar { opacity: 0; pointer-events: none; }
+body.fs-mode #topbar.fs-show, body.fs-mode #mixbar.fs-show { opacity: 1; pointer-events: all; }
+body.fs-mode #assetPanel { width: 0; opacity: 0; pointer-events: none; }
+body.fs-mode #sidePanel { width: 0; opacity: 0; pointer-events: none; }
+body.fs-mode { cursor: none; }
+body.fs-mode.fs-show { cursor: default; }
+
+/* ─── ATTRIBUTION ─── */
+#attribution {
+  position: absolute; bottom: 4px; right: 8px; z-index: 50;
+  font-size: 10px; color: rgba(255,255,255,0.22); letter-spacing: 0.5px; pointer-events: none;
+}
+#attribution a { color: inherit; text-decoration: none; pointer-events: all; }
+#attribution a:hover { color: var(--accent); }
+
+/* ─── GLITCH ANIM ─── */
+@keyframes glitchMove {
+  0% { transform: translate(0,0); }
+  10% { transform: translate(-5px,2px) skewX(-3deg); filter: hue-rotate(90deg); }
+  20% { transform: translate(5px,-2px) skewX(3deg); }
+  30% { transform: translate(-2px,0); filter: hue-rotate(-90deg); }
+  100% { transform: translate(0,0); }
+}
+.glitching { animation: glitchMove 0.15s steps(3) infinite; }
+
+.kh { display: inline-block; padding: 2px 5px; background: var(--panel2); border: 1px solid var(--border); border-radius: 2px; font-size: 10px; color: var(--dim); margin: 1px; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="vjam-logo">
+    <!-- Logo image or text title injected by CONFIG at runtime -->
+  </div>
+  <div class="spacer"></div>
+  <button class="tbtn" onclick="togglePanel('asset')">▤ ASSETS</button>
+  <button class="tbtn" onclick="prevAsset()">◀ PREV</button>
+  <button class="tbtn" onclick="nextAsset()">NEXT ▶</button>
+  <button class="tbtn" onclick="randomAsset()">🎲 RND</button>
+  <div class="sep"></div>
+  <button class="tbtn" onclick="togglePanel('side')">⚙ CONTROLS</button>
+  <button class="tbtn" id="autoLabel" onclick="toggleAuto()">AUTO ▶ ON</button>
+  <button class="tbtn" id="fsBtn" onclick="goFullscreen()">⛶ FULLSCREEN</button>
+</div>
+
+<!-- MAIN CONTENT -->
+<div id="content">
+
+  <!-- ASSET PANEL -->
+  <div id="assetPanel">
+    <div class="panel-hdr">
+      <span>ASSETS <span id="assetCount" style="color:var(--accent)">0</span></span>
+      <span style="cursor:pointer;color:var(--dim)" onclick="clearAllAssets()" title="Clear all">✕</span>
+    </div>
+    <div id="dropZone" onclick="document.getElementById('fileInput').click()">
+      📁 DROP FILES<br>or click to load<br><span style="color:var(--dim);font-size:8px">IMG · VIDEO</span>
+    </div>
+    <input type="file" id="fileInput" multiple accept="image/*,video/mp4,video/webm">
+    <div id="assetGrid"></div>
+  </div>
+
+  <!-- STAGE -->
+  <div id="stage">
+    <div id="stageHint">
+      <div class="big-title" id="hintTitle"></div>
+      <div class="hint">DROP ASSETS TO BEGIN</div>
+    </div>
+    <div class="layer" id="layerA"></div>
+    <div class="layer" id="layerB"></div>
+    <div id="takeoverLayer">
+      <img id="takeoverAsset" src="" alt="">
+      <div id="takeoverTint"></div>
+      <div id="takeoverTitle"></div>
+    </div>
+    <div id="titleFlash"><div id="flashMsg"></div></div>
+    <div id="liveTextLayer"><div id="liveMsg"></div></div>
+    <div id="scanlines"></div>
+    <canvas id="glitchFx"></canvas>
+    <div id="vignette"></div>
+    <div id="strobeOverlay"></div>
+    <div id="statusDot">
+      <div class="dot live" title="LIVE"></div>
+      <div class="dot auto" id="dotAuto" style="opacity:0.3" title="AUTO"></div>
+    </div>
+    <div id="autoCountdown">NEXT: —</div>
+    <div id="attribution"></div>
+  </div>
+
+  <!-- SIDE PANEL -->
+  <div id="sidePanel">
+
+    <div class="sp-section">
+      <div class="sp-title">TEXT OVERLAY</div>
+      <textarea id="overlayInput" rows="2" placeholder="TYPE MESSAGE..." oninput="setLiveText(this.value)"></textarea>
+      <div class="color-row">
+        <div class="cdot active" style="background:#fff" onclick="setTextColor('#fff',this)"></div>
+        <div class="cdot" style="background:var(--red)" onclick="setTextColor('var(--red)',this)"></div>
+        <div class="cdot" style="background:#5599ff" onclick="setTextColor('#5599ff',this)"></div>
+        <div class="cdot" style="background:var(--accent)" onclick="setTextColor('var(--accent)',this)"></div>
+        <div class="cdot" style="background:var(--yellow)" onclick="setTextColor('var(--yellow)',this)"></div>
+        <div class="cdot" style="background:var(--mag)" onclick="setTextColor('var(--mag)',this)"></div>
+      </div>
+      <div class="pos-row">
+        <button class="sbtn" onclick="setTextPos('top',this)">TOP</button>
+        <button class="sbtn" onclick="setTextPos('center',this)">MID</button>
+        <button class="sbtn active" onclick="setTextPos('bottom',this)">BTM</button>
+        <button class="sbtn" onclick="setLiveText('');document.getElementById('overlayInput').value=''">✕ CLEAR</button>
+      </div>
+      <div class="tgl-row">
+        <div class="tgl on" id="textTgl" onclick="toggleTextVis()"></div>
+        <span class="tgl-label">TEXT VISIBLE</span>
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <div class="sp-title">LIVE FX</div>
+      <div class="fx-toggles">
+        <button class="fxtgl" onclick="toggleFx('scan',this)">SCAN</button>
+        <button class="fxtgl on" id="fxGlitchBtn" onclick="toggleFx('glitch',this)">GLITCH</button>
+        <button class="fxtgl" onclick="toggleFx('invert',this)">INVERT</button>
+        <button class="fxtgl" onclick="toggleFx('mirror',this)">MIRROR</button>
+        <button class="fxtgl" onclick="toggleFx('vhs',this)">VHS</button>
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>HUE</span><span id="hueVal">0°</span></div>
+        <input type="range" id="hueRange" min="0" max="360" value="0" oninput="setHue(this.value)">
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>CONTRAST</span><span id="conVal">100%</span></div>
+        <input type="range" id="conRange" min="50" max="300" value="100" oninput="setCon(this.value)">
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>BRIGHTNESS</span><span id="briVal">100%</span></div>
+        <input type="range" id="briRange" min="20" max="300" value="100" oninput="setBri(this.value)">
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>SATURATION</span><span id="satVal">100%</span></div>
+        <input type="range" id="satRange" min="0" max="300" value="100" oninput="setSat(this.value)">
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <div class="sp-title">AUTO ADVANCE</div>
+      <div class="tgl-row">
+        <div class="tgl on" id="autoTgl" onclick="toggleAuto()"></div>
+        <span class="tgl-label" id="autoTglLabel">ACTIVE</span>
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>INTERVAL</span><span id="intvlVal">10s</span></div>
+        <input type="range" id="intvlRange" min="2" max="60" value="10"
+          style="background:linear-gradient(to right,#1a1a2e,var(--accent2))"
+          oninput="setAdvanceInterval(this.value)">
+      </div>
+      <div class="pos-row">
+        <button class="sbtn" id="modeSeq" onclick="setMode('seq',this)">SEQ</button>
+        <button class="sbtn active" id="modeRnd" onclick="setMode('rnd',this)">RND</button>
+        <button class="sbtn" id="modePing" onclick="setMode('ping',this)">PING</button>
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <div class="sp-title">AUTO TAKEOVER</div>
+      <div class="tgl-row">
+        <div class="tgl on" id="autoTkoTgl" onclick="toggleAutoTakeover()"></div>
+        <span class="tgl-label" id="tkoTglLabel">EVERY ~2 MIN</span>
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>INTERVAL</span><span id="tkoVal">120s</span></div>
+        <input type="range" id="tkoRange" min="30" max="300" value="120"
+          style="background:linear-gradient(to right,#1a1a2e,var(--red))"
+          oninput="setTkoInterval(this.value)">
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>DURATION</span><span id="tkoDurVal">5s</span></div>
+        <input type="range" id="tkoDurRange" min="2" max="15" value="5"
+          style="background:linear-gradient(to right,#1a1a2e,var(--mag))"
+          oninput="setTkoDur(this.value)">
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <div class="sp-title">TITLE FLASH</div>
+      <div class="tgl-row">
+        <div class="tgl on" id="flashAutoTgl" onclick="toggleAutoFlash()"></div>
+        <span class="tgl-label">AUTO FLASH</span>
+      </div>
+      <div class="fx-row">
+        <div class="fx-label"><span>INTERVAL</span><span id="flashIntvlVal">30s</span></div>
+        <input type="range" id="flashIntvlRange" min="10" max="120" value="30"
+          style="background:linear-gradient(to right,#1a1a2e,var(--yellow))"
+          oninput="setFlashInterval(this.value)">
+      </div>
+      <div class="pos-row">
+        <button class="sbtn active" onclick="setFlashStyle('solid',this)">SOLID</button>
+        <button class="sbtn" onclick="setFlashStyle('outline',this)">OUTLINE</button>
+        <button class="sbtn" onclick="setFlashStyle('glitch',this)">GLITCH</button>
+        <button class="sbtn" onclick="setFlashStyle('rainbow',this)">RAINBOW</button>
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <div class="sp-title">SHORTCUTS</div>
+      <div style="line-height:1.9;color:var(--dim);font-size:8px">
+        <span class="kh">SPC</span> Flash &nbsp; <span class="kh">F</span> Fullscreen<br>
+        <span class="kh">Q/E</span> Prev/Next &nbsp; <span class="kh">R</span> Red<br>
+        <span class="kh">B</span> Blue &nbsp; <span class="kh">A</span> Auto &nbsp; <span class="kh">G</span> Glitch<br>
+        <span class="kh">T</span> Tap BPM &nbsp; <span class="kh">1–9</span> Load # &nbsp; <span class="kh">ESC</span> Exit
+      </div>
+    </div>
+
+  </div><!-- /sidePanel -->
+</div><!-- /content -->
+
+<!-- MIX BAR -->
+<div id="mixbar">
+  <div class="deck-mini a-mini" id="miniA"><span class="deck-mini-lbl">A</span></div>
+  <div class="deck-lbl a">A</div>
+  <div id="xfWrap">
+    <input type="range" id="xf" min="0" max="100" value="0"
+      style="background:linear-gradient(to right,var(--red),#1a1a2e,#5599ff)"
+      oninput="xfade(this.value)">
+  </div>
+  <div class="deck-lbl b">B</div>
+  <div class="deck-mini b-mini" id="miniB"><span class="deck-mini-lbl">B</span></div>
+  <div class="sep"></div>
+  <div class="tr-group">
+    <button class="trbtn" onclick="setTrans('cut',this)">CUT</button>
+    <button class="trbtn" onclick="setTrans('fade',this)">FADE</button>
+    <button class="trbtn active" onclick="setTrans('glitch',this)">GLITCH</button>
+    <button class="trbtn" onclick="setTrans('zoom',this)">ZOOM</button>
+    <button class="trbtn" onclick="setTrans('slide',this)">SLIDE</button>
+    <button class="trbtn" onclick="setTrans('strobe',this)">STROBE</button>
+  </div>
+  <div class="sep"></div>
+  <button id="bpmBtn" onclick="tapBpm()">TAP<br><span id="bpmDisp">BPM</span></button>
+  <button id="flashBtn" onclick="doFlash()">⚡ FLASH<br><span style="font-size:8px">SPACE</span></button>
+  <button id="redBtn"
+    onmousedown="holdTakeover('red')" onmouseup="releaseTakeover()"
+    ontouchstart="holdTakeover('red')" ontouchend="releaseTakeover()">🔴 RED</button>
+  <button id="blueBtn"
+    onmousedown="holdTakeover('blue')" onmouseup="releaseTakeover()"
+    ontouchstart="holdTakeover('blue')" ontouchend="releaseTakeover()">🔵 BLUE</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  VJAM ENGINE
+//  White label edition — configure via CONFIG block above
+//  © Realitycraft  |  evo.ist/vjam  |  evo@playable.agency
+// ═══════════════════════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+
+// Apply CONFIG to CSS custom properties
+document.documentElement.style.setProperty('--accent', CONFIG.accentColor);
+document.documentElement.style.setProperty('--red',    CONFIG.redColor);
+document.documentElement.style.setProperty('--blue',   CONFIG.blueColor);
+document.documentElement.style.setProperty('--panel',  CONFIG.panelBg);
+
+// Inject title/logo
+;(function applyBranding() {
+  document.title = CONFIG.title + ' — VJ';
+  const logo = $('vjam-logo');
+  if (CONFIG.logoUrl) {
+    logo.innerHTML = `<img src="${CONFIG.logoUrl}" alt="${CONFIG.title}"><div class="subtitle-text">${CONFIG.subtitle}</div>`;
+  } else {
+    logo.innerHTML = `<div><div class="title-text">${CONFIG.title}</div><div class="subtitle-text">${CONFIG.subtitle}</div></div>`;
+  }
+  $('hintTitle').textContent = CONFIG.title;
+  $('flashMsg').textContent  = CONFIG.title;
+  $('takeoverTitle').textContent = CONFIG.title;
+
+  if (CONFIG.showAttribution) {
+    $('attribution').innerHTML = `<a href="${CONFIG.attributionUrl}" target="_blank" rel="noopener">vjam by realitycraft</a>`;
+  }
+})();
+
+// ── STATE ──
+const S = {
+  assets: [], deckA: null, deckB: null, xf: 0,
+  trans: CONFIG.defaultTrans, transiting: false,
+  cur: 0, autoDir: 1,
+  auto: CONFIG.defaultAutoOn,
+  autoMode: CONFIG.defaultMode,
+  autoInterval: CONFIG.defaultInterval * 1000,
+  autoTimer: null,
+  autoTakeover: CONFIG.autoTakeover,
+  tkoInterval: CONFIG.tkoInterval * 1000,
+  tkoDur: CONFIG.tkoDuration * 1000,
+  tkoTimer: null, tkoActive: false,
+  autoFlash: CONFIG.autoFlash,
+  flashInterval: CONFIG.flashInterval * 1000,
+  flashTimer: null, flashStyle: CONFIG.flashStyle,
+  hue: 0, con: 100, bri: 100, sat: 100,
+  fxGlitch: true, fxScan: false, fxInvert: false, fxMirror: false, fxVhs: false,
+  textVis: true, isFs: false, bpmTaps: [], glitchTimer: null,
+};
+
+// ── INDEXEDDB ──
+const DB_NAME = 'VJAM_v2';
+let db;
+function openDB() {
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => { if (!e.target.result.objectStoreNames.contains('assets')) e.target.result.createObjectStore('assets', { keyPath: 'id' }); };
+    req.onsuccess = e => { db = e.target.result; res(db); };
+    req.onerror = rej;
+  });
+}
+function dbSave(a) {
+  if (!db) return;
+  const tx = db.transaction('assets', 'readwrite');
+  tx.objectStore('assets').put({ id: a.id, name: a.name, type: a.type, data: a.data });
+}
+function dbDelete(id) { if (!db) return; db.transaction('assets','readwrite').objectStore('assets').delete(id); }
+function dbLoadAll() { return new Promise(res => { if (!db) return res([]); const req = db.transaction('assets','readonly').objectStore('assets').getAll(); req.onsuccess = e => res(e.target.result||[]); req.onerror = ()=>res([]); }); }
+function dbClear() { if (!db) return; db.transaction('assets','readwrite').objectStore('assets').clear(); }
+
+// ── FILE LOADING ──
+const dropZone = $('dropZone'), fileInput = $('fileInput'), stage = $('stage');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('over'); handleFiles(e.dataTransfer.files); });
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('drag-over'); });
+stage.addEventListener('dragleave', () => stage.classList.remove('drag-over'));
+stage.addEventListener('drop', e => {
+  e.preventDefault(); stage.classList.remove('drag-over');
+  const idx = e.dataTransfer.getData('assetIdx');
+  if (idx !== '') { const d = S.xf < 50 ? 'B' : 'A'; loadDeck(d, parseInt(idx)); doTransition(); }
+  else handleFiles(e.dataTransfer.files);
+});
+
+function handleFiles(files) {
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/') && !file.type.startsWith('video/')) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const id = 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+      const blob = new Blob([ev.target.result], { type: file.type });
+      const url = URL.createObjectURL(blob);
+      const obj = { id, name: file.name.replace(/\.[^.]+$/,''), type: file.type.startsWith('video/') ? 'video' : 'image', data: ev.target.result, url };
+      S.assets.push(obj);
+      dbSave(obj);
+      addThumb(obj, S.assets.length - 1);
+      updateCount();
+      if (S.assets.length === 1) { loadDeck('A', 0); $('stageHint').style.display = 'none'; }
+      else if (S.assets.length === 2) { loadDeck('B', 1); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function restoreAssets() {
+  const saved = await dbLoadAll();
+  if (!saved.length) return;
+  saved.forEach((rec, i) => {
+    const mime = rec.type === 'video' ? 'video/mp4' : 'image/png';
+    const url = URL.createObjectURL(new Blob([rec.data], { type: mime }));
+    const obj = { id: rec.id, name: rec.name, type: rec.type, data: rec.data, url };
+    S.assets.push(obj);
+    addThumb(obj, i);
+  });
+  updateCount();
+  if (S.assets.length > 0) {
+    $('stageHint').style.display = 'none';
+    loadDeck('A', 0);
+    if (S.assets.length > 1) loadDeck('B', 1);
+  }
+}
+
+function clearAllAssets() {
+  if (!confirm('Clear all assets from this session?')) return;
+  S.assets.forEach(a => URL.revokeObjectURL(a.url));
+  S.assets = [];
+  $('assetGrid').innerHTML = '';
+  ['layerA','layerB'].forEach(id => $(id).innerHTML = '');
+  ['miniA','miniB'].forEach((id,i) => { $(id).innerHTML = `<span class="deck-mini-lbl">${i?'B':'A'}</span>`; });
+  S.deckA = S.deckB = null;
+  $('stageHint').style.display = 'flex';
+  dbClear(); updateCount();
+}
+
+// ── THUMBNAILS ──
+function addThumb(asset, idx) {
+  const div = document.createElement('div');
+  div.className = 'thumb'; div.dataset.idx = idx; div.id = 'th_' + idx; div.draggable = true;
+  const num = document.createElement('span'); num.className = 'thumb-num'; num.textContent = idx+1; div.appendChild(num);
+  const el = asset.type === 'video' ? Object.assign(document.createElement('video'), { src: asset.url, muted: true, playsInline: true, preload: 'metadata' }) : Object.assign(document.createElement('img'), { src: asset.url, alt: asset.name });
+  if (asset.type === 'video') el.addEventListener('loadedmetadata', () => el.currentTime = 0.1);
+  div.appendChild(el);
+  const ov = document.createElement('div'); ov.className = 'thumb-overlay';
+  ov.innerHTML = `<span class="dtag a" onclick="event.stopPropagation();loadDeck('A',${idx})">A</span><span class="dtag b" onclick="event.stopPropagation();loadDeck('B',${idx})">B</span>`;
+  div.appendChild(ov);
+  div.addEventListener('click', () => { const d = S.xf < 50 ? 'B' : 'A'; loadDeck(d, idx); doTransition(); });
+  div.addEventListener('dragstart', e => e.dataTransfer.setData('assetIdx', idx));
+  $('assetGrid').appendChild(div);
+}
+
+function updateCount() { $('assetCount').textContent = S.assets.length; }
+
+// ── DECK LOADING ──
+function loadDeck(deck, idx) {
+  if (idx < 0 || idx >= S.assets.length) return;
+  const asset = S.assets[idx]; S.cur = idx;
+  const layer = $('layer' + deck), mini = $('mini' + deck);
+  layer.innerHTML = ''; const lbl = mini.querySelector('.deck-mini-lbl'); mini.innerHTML = ''; if (lbl) mini.appendChild(lbl);
+  function mkMedia(cover) {
+    const m = asset.type === 'video'
+      ? Object.assign(document.createElement('video'), { src: asset.url, muted: true, loop: true, playsInline: true, autoplay: true })
+      : Object.assign(document.createElement('img'), { src: asset.url, alt: asset.name });
+    m.style.cssText = cover ? 'width:100%;height:100%;object-fit:cover;display:block;' : 'width:100%;height:100%;object-fit:contain;display:block;';
+    if (asset.type === 'video') m.play().catch(()=>{});
+    return m;
+  }
+  layer.appendChild(mkMedia(false));
+  mini.appendChild(mkMedia(true));
+  if (deck === 'A') S.deckA = idx; else S.deckB = idx;
+  document.querySelectorAll(`.thumb.active-${deck.toLowerCase()}`).forEach(el => el.classList.remove(`active-${deck.toLowerCase()}`));
+  const th = $('th_' + idx); if (th) th.classList.add(`active-${deck.toLowerCase()}`);
+  applyFx();
+}
+
+// ── XFADE ──
+function xfade(val) {
+  S.xf = parseInt(val);
+  $('layerA').style.opacity = 1 - S.xf/100;
+  $('layerB').style.opacity = S.xf/100;
+}
+function animXfade(target, dur=400) {
+  const start = S.xf, diff = target - start, t0 = Date.now();
+  function tick() {
+    const t = Math.min(1, (Date.now()-t0)/dur);
+    const e = t<.5 ? 2*t*t : -1+(4-2*t)*t;
+    $('xf').value = start + diff*e; xfade(start + diff*e);
+    if (t < 1) requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── TRANSITIONS ──
+function setTrans(t, btn) {
+  S.trans = t;
+  document.querySelectorAll('.trbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function doTransition() {
+  if (S.transiting) return; S.transiting = true;
+  const to = 100 - S.xf;
+  switch(S.trans) {
+    case 'cut':    $('xf').value = to; xfade(to); S.transiting=false; break;
+    case 'fade':   animXfade(to,600); setTimeout(()=>S.transiting=false,650); break;
+    case 'glitch': doGlitchTrans(to); break;
+    case 'zoom':   doZoomTrans(to); break;
+    case 'slide':  doSlideTrans(to); break;
+    case 'strobe': doStrobeTrans(to); break;
+    default:       $('xf').value = to; xfade(to); S.transiting=false;
+  }
+}
+function doGlitchTrans(to) {
+  stage.classList.add('glitching');
+  const c = $('glitchFx'); c.style.opacity=1; let f=0;
+  function fr() { paintGlitch(c); if(++f<10) requestAnimationFrame(fr); else { animXfade(to,280); setTimeout(()=>{ stage.classList.remove('glitching'); c.style.opacity=S.fxGlitch?null:0; S.transiting=false; },320); } }
+  requestAnimationFrame(fr);
+}
+function doZoomTrans(to) {
+  const out = S.xf<50 ? $('layerA') : $('layerB');
+  out.style.transition='transform 0.25s ease-in,opacity 0.25s'; out.style.transform='scale(1.25)'; out.style.opacity=0;
+  setTimeout(()=>{ animXfade(to,300); out.style.transition=''; out.style.transform=''; setTimeout(()=>S.transiting=false,350); },240);
+}
+function doSlideTrans(to) {
+  const outL=S.xf<50?$('layerA'):$('layerB'), inL=S.xf<50?$('layerB'):$('layerA'), dx=Math.random()>.5?1:-1;
+  inL.style.transform=`translateX(${dx*100}%)`; inL.style.transition='transform 0.35s ease'; outL.style.transition='transform 0.35s ease,opacity 0.35s';
+  requestAnimationFrame(()=>{ inL.style.transform='translateX(0)'; outL.style.transform=`translateX(${-dx*40}%)`; outL.style.opacity=0; $('xf').value=to; xfade(to); setTimeout(()=>{ [outL,inL].forEach(l=>{l.style.transition='';l.style.transform='';l.style.opacity='';}); S.transiting=false; },370); });
+}
+function doStrobeTrans(to) {
+  const s=$('strobeOverlay'); let n=0;
+  const iv=setInterval(()=>{ s.style.opacity=n%2===0?'0.9':'0'; if(++n>7){ clearInterval(iv); s.style.opacity=0; animXfade(to,200); setTimeout(()=>S.transiting=false,250); } },45);
+}
+function paintGlitch(c) {
+  const w=c.width=stage.offsetWidth, h=c.height=stage.offsetHeight, ctx=c.getContext('2d');
+  ctx.clearRect(0,0,w,h);
+  [CONFIG.redColor,'#1a4fff',CONFIG.accentColor,'#ffee00','#ff00cc'].forEach((col,i)=>{ ctx.fillStyle=col; ctx.globalAlpha=Math.random()*.35; ctx.fillRect(Math.random()*w-w*.5,Math.random()*h,w*1.5,Math.random()*20+2); });
+}
+
+// ── GLITCH LOOP ──
+function startGlitchLoop() {
+  clearInterval(S.glitchTimer); const c=$('glitchFx');
+  S.glitchTimer=setInterval(()=>{ if(Math.random()<.4){ paintGlitch(c); c.style.opacity=(Math.random()*.3).toFixed(2); } else c.style.opacity=0; },100);
+}
+function stopGlitchLoop() { clearInterval(S.glitchTimer); $('glitchFx').style.opacity=0; }
+
+// ── FX ──
+function toggleFx(fx, btn) {
+  const k='fx'+fx[0].toUpperCase()+fx.slice(1); S[k]=!S[k]; btn.classList.toggle('on',S[k]);
+  if(fx==='glitch') S.fxGlitch ? startGlitchLoop() : stopGlitchLoop();
+  applyFx();
+}
+function applyFx() {
+  const f=[`hue-rotate(${S.hue}deg)`,`contrast(${S.con}%)`,`brightness(${S.bri}%)`,`saturate(${S.sat}%)`,S.fxInvert?'invert(1)':'',S.fxVhs?'sepia(0.3) contrast(1.2)':''].filter(Boolean).join(' ');
+  [$('layerA'),$('layerB')].forEach(l=>{ l.style.filter=f; l.style.transform=S.fxMirror?'scaleX(-1)':''; });
+  $('scanlines').style.opacity=S.fxScan?1:0;
+}
+function setHue(v){S.hue=+v;$('hueVal').textContent=v+'°';applyFx();}
+function setCon(v){S.con=+v;$('conVal').textContent=v+'%';applyFx();}
+function setBri(v){S.bri=+v;$('briVal').textContent=v+'%';applyFx();}
+function setSat(v){S.sat=+v;$('satVal').textContent=v+'%';applyFx();}
+
+// ── NAVIGATION ──
+function nextAsset(){if(!S.assets.length)return;const d=S.xf<50?'B':'A';loadDeck(d,(S.cur+1)%S.assets.length);doTransition();}
+function prevAsset(){if(!S.assets.length)return;const d=S.xf<50?'B':'A';loadDeck(d,(S.cur-1+S.assets.length)%S.assets.length);doTransition();}
+function randomAsset(){if(S.assets.length<2)return;const d=S.xf<50?'B':'A';let i;do{i=Math.floor(Math.random()*S.assets.length);}while(i===S.cur);loadDeck(d,i);doTransition();}
+
+// ── AUTO ADVANCE ──
+function toggleAuto(){S.auto=!S.auto;$('autoTgl').classList.toggle('on',S.auto);$('dotAuto').style.opacity=S.auto?1:.3;$('autoLabel').textContent=S.auto?'AUTO ▶ ON':'AUTO ▶ OFF';$('autoTglLabel').textContent=S.auto?'ACTIVE':'OFF';S.auto?startAuto():stopAuto();}
+let nextAutoAt=0, autoCountdownIv=null;
+function startAuto(){ stopAuto(); scheduleNext(); }
+function scheduleNext(){
+  clearTimeout(S.autoTimer); clearInterval(autoCountdownIv);
+  nextAutoAt=Date.now()+S.autoInterval;
+  S.autoTimer=setTimeout(()=>{
+    if(!S.auto||S.tkoActive){scheduleNext();return;}
+    const d=S.xf<50?'B':'A'; let i;
+    if(S.autoMode==='rnd'){do{i=Math.floor(Math.random()*S.assets.length);}while(i===S.cur&&S.assets.length>1);}
+    else if(S.autoMode==='ping'){S.cur+=S.autoDir;if(S.cur>=S.assets.length){S.autoDir=-1;S.cur=S.assets.length-2;}if(S.cur<0){S.autoDir=1;S.cur=1;}i=S.cur;}
+    else{i=(S.cur+1)%S.assets.length;}
+    if(S.assets.length>0)loadDeck(d,i);doTransition();scheduleNext();
+  },S.autoInterval);
+  const badge=$('autoCountdown'); badge.classList.add('visible');
+  autoCountdownIv=setInterval(()=>{ const r=Math.max(0,Math.round((nextAutoAt-Date.now())/1000)); badge.textContent='NEXT: '+r+'s'; if(r<=0)badge.classList.remove('visible'); },500);
+}
+function stopAuto(){clearTimeout(S.autoTimer);clearInterval(autoCountdownIv);$('autoCountdown').classList.remove('visible');}
+function setAdvanceInterval(v){S.autoInterval=+v*1000;$('intvlVal').textContent=v+'s';if(S.auto)startAuto();}
+function setMode(m,btn){S.autoMode=m;document.querySelectorAll('#modeSeq,#modeRnd,#modePing').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+
+// ── AUTO TAKEOVER ──
+function toggleAutoTakeover(){S.autoTakeover=!S.autoTakeover;$('autoTkoTgl').classList.toggle('on',S.autoTakeover);$('tkoTglLabel').textContent=S.autoTakeover?'EVERY ~'+Math.round(S.tkoInterval/1000)+'s':'OFF';S.autoTakeover?scheduleTakeover():clearTimeout(S.tkoTimer);}
+function setTkoInterval(v){S.tkoInterval=+v*1000;$('tkoVal').textContent=v+'s';if(S.autoTakeover)scheduleTakeover();}
+function setTkoDur(v){S.tkoDur=+v*1000;$('tkoDurVal').textContent=v+'s';}
+function scheduleTakeover(){
+  clearTimeout(S.tkoTimer);
+  S.tkoTimer=setTimeout(()=>{ if(S.autoTakeover&&!S.tkoActive){fireAssetTakeover(Math.random()>.5?'red':'blue',S.tkoDur);} scheduleTakeover(); },S.tkoInterval*(0.8+Math.random()*.4));
+}
+function fireAssetTakeover(color, dur){
+  if(!S.assets.length)return; S.tkoActive=true;
+  const pool=S.assets.filter(a=>a.type==='image'); const asset=(pool.length?pool:S.assets)[Math.floor(Math.random()*(pool.length||S.assets.length))];
+  $('takeoverAsset').src=asset.url;
+  $('takeoverTint').style.background=color==='red'
+    ?'linear-gradient(135deg,rgba(200,0,0,0.75),rgba(120,0,50,0.85))'
+    :'linear-gradient(135deg,rgba(0,20,200,0.75),rgba(50,0,180,0.85))';
+  $('takeoverTitle').style.textShadow=color==='red'?'0 0 60px #ff4444,0 0 120px rgba(255,100,100,0.5)':'0 0 60px #4488ff,0 0 120px rgba(100,150,255,0.5)';
+  $('takeoverLayer').classList.add('active'); doFlash(600);
+  setTimeout(()=>{ $('takeoverLayer').classList.remove('active'); setTimeout(()=>{ $('takeoverAsset').src=''; S.tkoActive=false; },300); },dur);
+}
+function holdTakeover(color){
+  if(!S.assets.length){ $('takeoverTint').style.background=color==='red'?'#cc0000':'#001acc'; $('takeoverAsset').src=''; $('takeoverLayer').classList.add('active'); S.tkoActive=true; doFlash(); return; }
+  S.tkoActive=true;
+  const pool=S.assets.filter(a=>a.type==='image'); const asset=(pool.length?pool:S.assets)[Math.floor(Math.random()*(pool.length||S.assets.length))];
+  $('takeoverAsset').src=asset.url;
+  $('takeoverTint').style.background=color==='red'?'linear-gradient(135deg,rgba(200,0,0,0.75),rgba(120,0,50,0.85))':'linear-gradient(135deg,rgba(0,20,200,0.75),rgba(50,0,180,0.85))';
+  $('takeoverTitle').style.textShadow=color==='red'?'0 0 60px #ff4444':'0 0 60px #4488ff';
+  $('takeoverLayer').classList.add('active'); doFlash();
+}
+function releaseTakeover(){ $('takeoverLayer').classList.remove('active'); setTimeout(()=>{ $('takeoverAsset').src=''; S.tkoActive=false; },300); }
+
+// ── FLASH ──
+const flashStyleFns={
+  solid:   el=>{ el.style.webkitTextFillColor=''; el.style.background=''; el.style.webkitBackgroundClip=''; el.style.color='#fff'; el.style.webkitTextStroke=''; el.style.textShadow='0 0 80px #fff,0 0 160px rgba(255,255,255,0.4)'; },
+  outline: el=>{ el.style.background=''; el.style.webkitBackgroundClip=''; el.style.color='transparent'; el.style.webkitTextFillColor='transparent'; el.style.webkitTextStroke='3px #fff'; el.style.textShadow='0 0 40px rgba(255,255,255,0.5)'; },
+  glitch:  el=>{ el.style.background=''; el.style.webkitBackgroundClip=''; el.style.webkitTextFillColor=''; el.style.color='#fff'; el.style.webkitTextStroke=''; el.style.textShadow=`5px 0 ${CONFIG.redColor},-5px 0 ${CONFIG.accentColor},0 3px #ffee00`; },
+  rainbow: el=>{ el.style.background='linear-gradient(90deg,#ff1a1a,#ffee00,#00ffcc,#1a4fff,#ff00cc)'; el.style.webkitBackgroundClip='text'; el.style.webkitTextFillColor='transparent'; el.style.textShadow='none'; el.style.webkitTextStroke=''; },
+};
+function setFlashStyle(s,btn){ S.flashStyle=s; document.querySelectorAll('.sp-section:last-of-type .pos-row .sbtn').forEach(b=>b.classList.remove('active')); if(btn)btn.classList.add('active'); }
+function doFlash(dur=1600){ const el=$('flashMsg'); if(flashStyleFns[S.flashStyle])flashStyleFns[S.flashStyle](el); const fl=$('titleFlash'); fl.style.opacity=1; fl.style.background='rgba(0,0,0,0.4)'; setTimeout(()=>{ fl.style.opacity=0; fl.style.background='transparent'; },dur); }
+function scheduleAutoFlash(){ clearTimeout(S.flashTimer); if(!S.autoFlash)return; S.flashTimer=setTimeout(()=>{ doFlash(); scheduleAutoFlash(); },S.flashInterval*(0.8+Math.random()*.4)); }
+function toggleAutoFlash(){ S.autoFlash=!S.autoFlash; $('flashAutoTgl').classList.toggle('on',S.autoFlash); scheduleAutoFlash(); }
+function setFlashInterval(v){ S.flashInterval=+v*1000; $('flashIntvlVal').textContent=v+'s'; scheduleAutoFlash(); }
+
+// ── TEXT ──
+function setLiveText(v){ $('liveMsg').textContent=v; }
+function setTextColor(c,dot){ $('liveMsg').style.color=c; document.querySelectorAll('.cdot').forEach(d=>d.classList.remove('active')); dot.classList.add('active'); }
+function setTextPos(p,btn){ const map={top:'flex-start',center:'center',bottom:'flex-end'}; $('liveTextLayer').style.alignItems=map[p]||'flex-end'; document.querySelectorAll('.pos-row .sbtn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); }
+function toggleTextVis(){ S.textVis=!S.textVis; $('textTgl').classList.toggle('on',S.textVis); $('liveTextLayer').style.display=S.textVis?'flex':'none'; }
+
+// ── BPM ──
+function tapBpm(){ const now=Date.now(); S.bpmTaps.push(now); if(S.bpmTaps.length>8)S.bpmTaps.shift(); if(S.bpmTaps.length>1){ const diffs=[]; for(let i=1;i<S.bpmTaps.length;i++)diffs.push(S.bpmTaps[i]-S.bpmTaps[i-1]); $('bpmDisp').textContent=Math.round(60000/(diffs.reduce((a,b)=>a+b)/diffs.length)); } $('bpmBtn').style.background='var(--accent)'; $('bpmBtn').style.color='#000'; setTimeout(()=>{ $('bpmBtn').style.background=''; $('bpmBtn').style.color=''; },80); }
+
+// ── PANELS ──
+function togglePanel(w){ if(w==='asset')$('assetPanel').classList.toggle('collapsed'); if(w==='side')$('sidePanel').classList.toggle('collapsed'); }
+
+// ── FULLSCREEN ──
+function goFullscreen(){ const el=document.documentElement; if(!document.fullscreenElement){ (el.requestFullscreen||el.webkitRequestFullscreen||el.mozRequestFullScreen).call(el); } else { (document.exitFullscreen||document.webkitExitFullscreen||document.mozCancelFullScreen).call(document); } }
+document.addEventListener('fullscreenchange',()=>{ S.isFs=!!document.fullscreenElement; document.body.classList.toggle('fs-mode',S.isFs); $('fsBtn').textContent=S.isFs?'⛶ EXIT FS':'⛶ FULLSCREEN'; if(S.isFs)showFsCtrl(); });
+document.addEventListener('webkitfullscreenchange',()=>{ S.isFs=!!document.webkitFullscreenElement; document.body.classList.toggle('fs-mode',S.isFs); if(S.isFs)showFsCtrl(); });
+let fsMvTimer=null;
+document.addEventListener('mousemove',()=>{ if(!S.isFs)return; showFsCtrl(); });
+document.addEventListener('touchstart',()=>{ if(!S.isFs)return; showFsCtrl(); });
+function showFsCtrl(){ document.body.classList.add('fs-show'); [$('topbar'),$('mixbar')].forEach(el=>el.classList.add('fs-show')); clearTimeout(fsMvTimer); fsMvTimer=setTimeout(()=>{ document.body.classList.remove('fs-show'); [$('topbar'),$('mixbar')].forEach(el=>el.classList.remove('fs-show')); },3000); }
+
+// ── KEYBOARD ──
+document.addEventListener('keydown', e => {
+  if(e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT') return;
+  switch(e.key){
+    case ' ': e.preventDefault(); doFlash(); break;
+    case 'f':case 'F': goFullscreen(); break;
+    case 'q':case 'Q': prevAsset(); break;
+    case 'e':case 'E': nextAsset(); break;
+    case 'r':case 'R': holdTakeover('red'); break;
+    case 'b':case 'B': holdTakeover('blue'); break;
+    case 'a':case 'A': toggleAuto(); break;
+    case 'g':case 'G': toggleFx('glitch',$('fxGlitchBtn')); break;
+    case 't':case 'T': tapBpm(); break;
+    case 'Escape': releaseTakeover(); if(document.fullscreenElement)goFullscreen(); break;
+    default: const n=parseInt(e.key); if(n>=1&&n<=9&&n<=S.assets.length){loadDeck(S.xf<50?'B':'A',n-1);}
+  }
+});
+document.addEventListener('keyup', e => { if(e.key==='r'||e.key==='R'||e.key==='b'||e.key==='B') releaseTakeover(); });
+
+// ── INIT ──
+async function init(){
+  await openDB();
+  await restoreAssets();
+  startGlitchLoop();
+  if(S.auto) startAuto();
+  if(S.autoTakeover) scheduleTakeover();
+  scheduleAutoFlash();
+  // Sync sliders with CONFIG defaults
+  $('intvlRange').value = CONFIG.defaultInterval;
+  $('intvlVal').textContent = CONFIG.defaultInterval + 's';
+  $('tkoRange').value = CONFIG.tkoInterval;
+  $('tkoVal').textContent = CONFIG.tkoInterval + 's';
+  $('tkoDurRange').value = CONFIG.tkoDuration;
+  $('tkoDurVal').textContent = CONFIG.tkoDuration + 's';
+  $('flashIntvlRange').value = CONFIG.flashInterval;
+  $('flashIntvlVal').textContent = CONFIG.flashInterval + 's';
+  // Set default mode button
+  document.querySelectorAll('#modeSeq,#modeRnd,#modePing').forEach(b=>b.classList.remove('active'));
+  const modeMap={seq:'modeSeq',rnd:'modeRnd',ping:'modePing'};
+  $(modeMap[CONFIG.defaultMode]||'modeRnd').classList.add('active');
+  // Set default transition button
+  document.querySelectorAll('.trbtn').forEach(b=>{ if(b.textContent.trim().toLowerCase()===CONFIG.defaultTrans)b.classList.add('active'); else b.classList.remove('active'); });
+  console.log(`%c VJAM — ${CONFIG.title} `, 'background:#0e0e18;color:'+CONFIG.accentColor+';font-size:16px;font-weight:900;padding:4px 8px;');
+  console.log('%cevo.ist/vjam  |  evo@playable.agency', 'color:#6644ff;font-size:10px;');
+}
+
+init();
+</script>
+</body>
+</html>
