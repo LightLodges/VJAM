@@ -1,21 +1,36 @@
-
-VJ lightweight browser for events, premieres, playful public interactive art; project takeover messages
-
 # VJAM
 
 **A lightweight, browser-based VJ mixing system for live events, installations, premieres, and venues.**
 
 No installs. No server. One HTML file.
 
+> **VJAM is a public resource for visual mixing and collaborative jamming with others.** This is a community-driven open-source project. [Support the development](#support--funding).
+
+---
+
+## 🎥 Live Demos
+
+**Try VJAM right now — no setup required:**
+
+- **[evo.ist/vjam/demo](https://evo.ist/vjam/demo)** — Primary demo instance
+- **[ghostoflinkwray.com/vjam](https://ghostoflinkwray.com/vjam)** — Alternative instance
+
+### See it in action
+
+Watch the demo video to see VJAM in two real use cases:
+
+1. **Live Festival Projection** — Fast deck switching with cross-fade transitions during a concert set
+2. **Gallery Installation Loop** — Auto-advance with automated takeover messages for ambient display
+
+[📹 VJAM Demo Video](#) *(demo video link and embed)*
+
 ---
 
 ## What it is
 
-VJAM is a single-file web VJ engine built for live performance. Drop it in a browser, load your assets, connect to a projector, and you are ready to mix. It runs entirely client-side with no dependencies, no accounts, and no network required after load.
+VJAM is a single-file web VJ engine built for live performance. Drop it in a browser, load your assets, connect to a projector, and you are ready to mix. It runs entirely client-side with no dependencies.
 
 Designed for speed of setup and ease of use — equally accessible to first-time VJs and experienced operators working fast under live conditions.
-
-**Live at** [evo.ist/vjam](https://evo.ist/vjam)
 
 ---
 
@@ -57,8 +72,8 @@ Designed for speed of setup and ease of use — equally accessible to first-time
 ## Quickstart
 
 ```bash
-# Clone or download
-git clone https://github.com/realitycraft/vjam.git
+# Clone the repo
+git clone https://github.com/LightLodges/vjam.git
 
 # Open in browser (Chrome or Edge recommended for broadest codec support)
 open vjam.html
@@ -117,8 +132,6 @@ const CONFIG = {
 };
 ```
 
-Custom CSS theming, logo injection, and multi-window output configurations are available as part of a consulting engagement.
-
 ---
 
 ## Browser support
@@ -142,35 +155,52 @@ MP4/H.264 video works across all modern browsers. ProRes (.mov) files should be 
 - Venue atmospherics and ambient display loops
 - Conference and premiere backgrounds
 - Collaborative live VJ performance
+- Educational workshops and creative coding
 
 ---
 
-## Licensing and white label
+## Support & Funding
 
-VJAM is available for white label licensing and bespoke integration.
+VJAM is developed as a **public resource** for visual mixing and live performance. We believe creative tools should be accessible to all.
 
-**To license VJAM or commission a custom build:**
+### Become a contributor or supporter
 
-Contact **[evo@playable.agency](mailto:evo@playable.agency)**
+**Help shape the future of VJAM:**
 
-Engagement options include:
+- 💰 **[Donate via GitHub Sponsors](#)** — Fund ongoing development and feature requests
+- 🤝 **[Contribute code](https://github.com/LightLodges/vjam/blob/main/CONTRIBUTING.md)** — Submit features, fixes, and improvements
+- 📢 **[Share your VJAM setup](#)** — Show us how you're using VJAM at your event or venue
+- 🎨 **[Submit asset packs](#)** — Share reusable transition effects or themes
 
-- **White label license** — deploy VJAM under your own brand for internal use or client projects
-- **Consulting** — bespoke VJ system development on top of VJAM for your specific event, venue, or platform
-- **Collaborator** — join Realitycraft as a creative or technical collaborator
-- **Service agreement** — ongoing support and feature development for organizations and venues
+### For organizations and venues
 
-More information: [evo.ist/vjam](https://evo.ist/vjam)
+**Interested in commercial licensing or custom development?**
+
+- **White label license** — Deploy VJAM under your brand for commercial use or client projects
+- **Bespoke features** — Custom VJ system development for your specific event, venue, or platform
+- **Maintenance & support** — Ongoing updates, bug fixes, and dedicated support
+
+**Contact Realitycraft:** [evo@playable.agency](mailto:evo@playable.agency)
+
+---
+
+## Licensing
+
+VJAM is open source and available for **non-commercial use** under the [MIT License](LICENSE).
+
+**Commercial use:** If you wish to use VJAM commercially, license VJAM through Realitycraft or commission custom modifications.
+
+**Contact:** [evo@playable.agency](mailto:evo@playable.agency)
 
 ---
 
 ## About
 
-VJAM is a project by **[Realitycraft](https://evo.ist)**, built for live creative production.
+VJAM is maintained by **LightLodges** as an open-source project dedicated to making professional VJ tools accessible to everyone. VJAM was originally created by **Realitycraft**.
 
-Realitycraft builds immersive experiences, XR worlds, and live performance tools at the intersection of design, technology, and event production.
-
-> To learn more about the ecosystem: [evo.ist](https://evo.ist)
+- **GitHub:** [github.com/LightLodges/vjam](https://github.com/LightLodges/vjam)
+- **Live demos:** [evo.ist/vjam/demo](https://evo.ist/vjam/demo) | [ghostoflinkwray.com/vjam](https://ghostoflinkwray.com/vjam)
+- **Commercial licensing:** [evo@playable.agency](mailto:evo@playable.agency)
 
 ---
 
@@ -178,9 +208,12 @@ Realitycraft builds immersive experiences, XR worlds, and live performance tools
 
 ```
 vjam/
-├── vjam.html          # Core engine — white label, configurable
-├── REALITY_GAMES_VJ.html  # Event-specific build (example deployment)
-└── README.md          # This file
+├── vjam.html                 # Core engine — white label, configurable
+├── REALITY_GAMES_VJ.html     # Event-specific build (example deployment)
+├── README.md                 # This file
+├── CONTRIBUTING.md           # Contribution guidelines
+├── LICENSE                   # MIT License (non-commercial)
+└── demo-video.mp4           # VJAM in action (2 use cases)
 ```
 
 Assets are loaded at runtime via the browser file API and stored in IndexedDB. No asset files are committed to the repository.
@@ -189,11 +222,16 @@ Assets are loaded at runtime via the browser file API and stored in IndexedDB. N
 
 ## Contributing
 
-VJAM is maintained by Realitycraft. Collaboration opportunities are available through a service agreement or contributor arrangement.
+We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation:
 
-Contact [evo@playable.agency](mailto:evo@playable.agency) to discuss.
+1. **Fork the repository**
+2. **Create a feature branch** (`git checkout -b feature/amazing-feature`)
+3. **Make your changes and commit** (`git commit -m 'Add amazing feature'`)
+4. **Push to your fork** (`git push origin feature/amazing-feature`)
+5. **Open a Pull Request** with a clear description
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ---
 
 *VJAM — built for the room, not the desk.*
-
